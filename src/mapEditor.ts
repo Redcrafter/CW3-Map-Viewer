@@ -310,18 +310,15 @@ function genMapMesh(map: Game) {
     const subTiles = 32;
 
     function getUV(x: number, y: number, texture: number) {
-        if (texture == 500) {
-            throw "no void texture";
-        }
+        const pixelW = 1 / 2048;
+        const pixelH = 1 / 4096;
 
         let x1 = (texture % 8) / 8;
-        // let y1 = (15 - Math.floor(texture / 8)) / 16;
         let y1;
 
         if (texture < 64) {
             y1 = (7 - Math.floor(texture / 8)) / 16;
         } else {
-
             y1 = (7 - Math.floor((texture - 64) / 8) + 8) / 16;
         }
 
@@ -333,6 +330,12 @@ function genMapMesh(map: Game) {
 
         let x2 = x1 + w;
         let y2 = y1 + h;
+
+        // https://gamedev.stackexchange.com/questions/46963/how-to-avoid-texture-bleeding-in-a-texture-atlas
+        x1 += pixelW / 2;
+        y1 += pixelH / 2;
+        x2 -= pixelW / 2;
+        y2 -= pixelH / 2;
 
         return {
             tl: [x1, y1],

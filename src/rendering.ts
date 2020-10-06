@@ -530,7 +530,7 @@ function loadTexture(src: string | HTMLImageElement) {
         // WebGL1 has different requirements for power of 2 images
         // vs non power of 2 images so check if the image is a
         // power of 2 in both dimensions.
-        gl.generateMipmap(gl.TEXTURE_2D);
+        // gl.generateMipmap(gl.TEXTURE_2D);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 

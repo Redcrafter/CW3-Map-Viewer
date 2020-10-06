@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "outDir": "./dist/js",
+        "rootDir": "./src",
+
+        "sourceMap": true,
+
+        "jsx": "react",
+        "jsxFactory": "hyperscript",
+    },
+    "exclude": [
+        "node_modules"
+    ]
+}

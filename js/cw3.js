@@ -160,14 +160,14 @@ class ColonialSpace {
         this.Ratings = parseFloat(data.querySelector("n").textContent);
     }
     get imageUrl() {
-        return `http://knucklecracker.com/creeperworld3/queryMaps.php?query=thumbnail&guid=${this.Md5}`;
+        return `https://knucklecracker.com/creeperworld3/queryMaps.php?query=thumbnail&guid=${this.Md5}`;
     }
     async download() {
-        return await (await fetch(`http://knucklecracker.com/creeperworld3/queryMaps.php?query=map&guid=${this.Md5}`)).arrayBuffer();
+        return await (await fetch(`https://knucklecracker.com/creeperworld3/queryMaps.php?query=map&guid=${this.Md5}`)).arrayBuffer();
     }
 }
 async function fetchMapList() {
-    let plain = new TextDecoder("utf-8").decode(new Zlib.Gunzip(new Uint8Array(await (await fetch("http://knucklecracker.com/creeperworld3/queryMaps.php?query=maplist")).arrayBuffer())).decompress());
+    let plain = new TextDecoder("utf-8").decode(new Zlib.Gunzip(new Uint8Array(await (await fetch("https://knucklecracker.com/creeperworld3/queryMaps.php?query=maplist")).arrayBuffer())).decompress());
     let parser = new DOMParser();
     let doc = parser.parseFromString(plain, "text/xml");
     let list = [];

@@ -5,6 +5,7 @@
         "rootDir": "./src",
 
         "sourceMap": true,
+        "removeComments": true,
 
         "jsx": "react",
         "jsxFactory": "hyperscript",

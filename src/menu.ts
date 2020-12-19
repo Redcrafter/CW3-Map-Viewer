@@ -1,4 +1,5 @@
 import { colonialSpace } from "./colonialSpace.js";
+import * as cw3 from "./cw3.js";
 import { mapEditor } from "./mapEditor.js";
 
 if(window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -20,11 +21,9 @@ colonialSpaceButton.addEventListener("click", () => {
 });
 
 loadButton.addEventListener("click", () => {
-    // mainMenu.display(false);
-
-    // let fileInput = document.getElementById("upload") as HTMLInputElement;
     let fileInput = document.createElement("input");
     fileInput.setAttribute("type", "file");
+    fileInput.setAttribute("accept", ".cw3"); // TODO: implement cw4 loading
     fileInput.click();
 
     fileInput.addEventListener("change", () => {
@@ -34,7 +33,8 @@ loadButton.addEventListener("click", () => {
         reader.readAsArrayBuffer(file);
 
         reader.onload = () => {
-            mapEditor.loadMap(reader.result as ArrayBuffer);
+            cw3.decompress(reader.result as ArrayBuffer, mapEditor.loadMap);
+
             mapEditor.display(true);
             mainMenu.display(false);
 

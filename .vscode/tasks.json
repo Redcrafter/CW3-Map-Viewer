@@ -17,7 +17,7 @@
 		{
 			"label": "scss: watch",
 			"type": "shell",
-			"command": "sass --watch ./style/style.scss ./dist/style/style.css ",
+			"command": "sass --watch ./style/style.scss ./dist/style/style.css",
 			"problemMatcher": [
 				"$node-sass"
 			],

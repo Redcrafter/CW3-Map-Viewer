@@ -79,7 +79,7 @@ class Info {
         this.Artifact0 = parseInt(info.querySelector("Artifact0").textContent);
         this.Artifact1 = parseInt(info.querySelector("Artifact1").textContent);
         this.Artifact2 = parseInt(info.querySelector("Artifact2").textContent);
-        if(info.querySelector("additionalScore")) {
+        if (info.querySelector("additionalScore")) {
             this.additionalScore = parseInt(info.querySelector("additionalScore").textContent);
         }
         this.cnTimer0 = parseInt(info.querySelector("cnTimer0").textContent);
@@ -238,9 +238,6 @@ class ColonialSpace {
     public Rating: number;
     public Ratings: number;
 
-    public ImageData: Uint8Array
-    public MapData: Uint8Array
-
     constructor(data: Element) {
         this.Id = parseFloat(data.querySelector("i").textContent);
         this.UnixTime = parseFloat(data.querySelector("t").textContent);
@@ -258,19 +255,32 @@ class ColonialSpace {
     }
 
     get imageUrl() {
-        return `http://knucklecracker.com/creeperworld3/queryMaps.php?query=thumbnail&guid=${this.Md5}`;
+        return `https://knucklecracker.com/creeperworld3/queryMaps.php?query=thumbnail&guid=${this.Md5}`;
     }
 
-    async download() {
-        return await (await fetch(`http://knucklecracker.com/creeperworld3/queryMaps.php?query=map&guid=${this.Md5}`)).arrayBuffer();
+    async download(): Promise<Game> {
+        let buffer = await (await fetch(`https://knucklecracker.com/creeperworld3/queryMaps.php?query=map&guid=${this.Md5}`)).arrayBuffer();
+
+        return await new Promise(resolve => {
+            decompress(buffer, resolve);
+        });
     }
+}
+
+function decompress(buffer: ArrayBuffer, callback: (game: Game) => any) {
+    let arr = new Uint8Array(buffer);
+    
+    LZMA.decompress(arr, (result) => {
+        let parser = new DOMParser();
+        callback(new Game(parser.parseFromString(result, "text/xml")))
+    });
 }
 
 async function fetchMapList() {
     let plain = new TextDecoder("utf-8").decode(
         new Zlib.Gunzip(
             new Uint8Array(
-                await (await fetch("http://knucklecracker.com/creeperworld3/queryMaps.php?query=maplist")).arrayBuffer()
+                await (await fetch("https://knucklecracker.com/creeperworld3/queryMaps.php?query=maplist")).arrayBuffer()
             )
         ).decompress()
     );
@@ -286,5 +296,4 @@ async function fetchMapList() {
     return list;
 }
 
-export { ColonialSpace, fetchMapList }
-export { Game, Info, Terrain, Unit }
+export { ColonialSpace, Game, Info, Terrain, Unit, fetchMapList, decompress }

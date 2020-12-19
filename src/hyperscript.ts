@@ -19,10 +19,18 @@ interface El {
 }
 
 function hyperscript(tag: string, props: Object, ...children: any[]): El {
+    if(!props) props = {};
     return { tag, props, children: flatten(children) }
 }
 
+/**
+ * 
+ * @param element element to render
+ * @param container parent element
+ * @param childIndex at which point to render the element
+ */
 function domDiff(element: El | string, container: HTMLElement, childIndex: number) {
+    // element to replace
     let el = container.childNodes[childIndex];
 
     if(!element) {
@@ -31,7 +39,7 @@ function domDiff(element: El | string, container: HTMLElement, childIndex: numbe
 
     if (typeof element == "string" || typeof element == "number") {
         if (el instanceof Text) {
-            if (el.textContent !== element) el.textContent = element;
+            el.textContent = element;
         } else {
             if (el) container.removeChild(el);
             container.insertBefore(document.createTextNode(element), container.childNodes[childIndex]);
@@ -42,7 +50,7 @@ function domDiff(element: El | string, container: HTMLElement, childIndex: numbe
                 container.removeChild(el);
             }
             el = document.createElement(element.tag);
-            container.appendChild(el);
+            container.insertBefore(el, container.childNodes[childIndex]);
 
             for (const key in element.props) {
                 let item = element.props[key];
@@ -85,7 +93,7 @@ function domDiff(element: El | string, container: HTMLElement, childIndex: numbe
             }
         }
 
-        while (el.children.length > pos) {
+        while (el.childNodes.length > pos) {
             el.removeChild(el.lastChild);
         }
     }

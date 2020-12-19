@@ -1,75 +1,183 @@
-import { createOrtho, mul } from "./matrix.js";
+import { mul, rotateX, rotateY, rotateZ, scale, translate } from "./matrix.js";
 
-interface Mesh {
-    vao: WebGLVertexArrayObject;
-    vert: WebGLBuffer;
-    uv: WebGLBuffer;
-    col: WebGLBuffer;
+class Mesh {
+    public vao: WebGLVertexArrayObject;
 
-    type: GLenum;
+    public vert: WebGLBuffer;
+    public uv: WebGLBuffer;
+    public col: WebGLBuffer;
 
-    vertices: number;
+    public vertices: number;
+
+    public type: GLenum;
+
+    constructor(shader: ShaderProgram, vertices: number[], uvs: number[], color: number[]) {
+        if (vertices.length / shader.vertexSize != uvs.length / shader.uvSize) {
+            throw "Vertices and Uvs have to have the same length";
+        }
+        if (vertices.length / shader.vertexSize != color.length / 4) {
+            throw "Each vertex requires a color with 4 elements";
+        }
+
+        let gl = shader.gl;
+        let attribLocations = shader.attribLocations;
+
+        this.vao = gl.createVertexArray();
+        gl.bindVertexArray(this.vao);
+
+        // Create a buffer for the square's positions.
+        this.vert = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vert);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+        gl.vertexAttribPointer(attribLocations.vertex, shader.vertexSize, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(attribLocations.vertex);
+
+        this.uv = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uv);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
+
+        gl.vertexAttribPointer(attribLocations.uv, shader.uvSize, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(attribLocations.uv);
+
+        this.col = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.col);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(color), gl.STATIC_DRAW);
+
+        gl.vertexAttribPointer(attribLocations.color, 4, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(attribLocations.color);
+
+        this.vertices = vertices.length / 2;
+        this.type = gl.TRIANGLES;
+    }
+}
+
+interface IVector3 {
+    x: number;
+    y: number;
+    z: number;
+}
+
+class Vector3 {
+    x: number;
+    y: number;
+    z: number;
+
+    constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    sub(other: Vector3) {
+        return new Vector3(this.x - other.x, this.y - other.y, this.z - other.z);
+    }
+
+    mul(val: number): Vector3;
+    mul(val: Vector3): Vector3;
+    mul(val: number | Vector3): Vector3 {
+        if (val instanceof Vector3) {
+            return new Vector3(this.x * val.x, this.y * val.y, this.z * val.z);
+        } else {
+            return new Vector3(this.x * val, this.y * val, this.z * val);
+        }
+    }
+
+    rotateX(angle: number) {
+        let sin = Math.sin(angle);
+        let cos = Math.cos(angle);
+        [this.y, this.z] = [this.y * cos - this.z * sin, this.y * sin + this.z * cos];
+    }
+    rotateY(angle: number) {
+        let sin = Math.sin(angle);
+        let cos = Math.cos(angle);
+        [this.x, this.z] = [this.x * cos - this.z * sin, this.x * sin + this.z * cos];
+    }
+    rotateZ(angle: number) {
+        let sin = Math.sin(angle);
+        let cos = Math.cos(angle);
+        [this.x, this.y] = [this.x * cos - this.y * sin, this.x * sin + this.y * cos];
+    }
+
+    copy() {
+        return new Vector3(this.x, this.y, this.z);
+    }
+
+    toString() {
+        return `(${this.x}, ${this.y}, ${this.z})`
+    }
 }
 
 class RenderObject {
-    public mesh: Mesh;
-    public texture?: WebGLTexture;
+    private _px = 0;
+    private _py = 0;
+    private _pz = 0;
+
+    private _sx = 1;
+    private _sy = 1;
+    private _sz = 1;
+
+    private _rx = 0;
+    private _ry = 0;
+    private _rz = 0;
+
+    private _parent?: RenderObject;
+    // private _children: Set<RenderObject> = new Set();
+    private _children: RenderObject[] = [];
+
+    private _staleMatrix = true;
+    private _matrix: Float32Array;
+
+
     public visible = true;
 
-    public position: Vector3;
-    public scale: Vector2;
+    public mesh?: Mesh;
+    public texture?: WebGLTexture;
 
     public onUpdate?: () => void;
 
-    private _parent?: RenderObject;
-    private _children: Set<RenderObject> = new Set();
+    public position: IVector3;
+    public rotation: IVector3;
+    public scale: IVector3;
 
-    private _rotation = 0;
-    /** rotation in radians */
-    get rotation() { return this._rotation; }
-    set rotation(v: number) {
-        if (this._rotation != v) {
-            this._rotation = v;
-            this._staleMatrix = true;
-        }
-    }
-
-    private _matrix;
-    private _staleMatrix = true;
-
-    public get parent() { return this._parent; }
-    public set parent(v: RenderObject) {
+    get parent() { return this._parent; }
+    set parent(v: RenderObject) {
         if (this._parent == v) return;
 
         if (this._parent) {
-            this._parent._children.delete(this);
+            // this._parent._children.delete(this);
+            this._parent._children.splice(this._parent._children.indexOf(this));
         }
 
         this._parent = v;
-        this._parent._children.add(this);
+        // this._parent._children.add(this);
+        this._parent._children.push(this);
         this._staleMatrix = true;
     }
 
+    get children() { return this._children; }
+
+    private get staleMatrix() { return this._staleMatrix || this._parent?.staleMatrix; }
     get matrix() {
         if (this.staleMatrix) {
-            this._staleMatrix = false;
-
-            /*this._matrix = mul(mul(
-                translate(this.position.x, this.position.y, this.position.z),
-                rotateZ(this._rotation)),
-                scale(this.scale.x, this.scale.y, 1), 
-            );*/
+            this._matrix = mul(
+                translate(this._px, this._py, this._pz),
+                rotateZ(this._rz),
+                rotateY(this._ry),
+                rotateX(this._rx),
+                scale(this._sx, this._sy, this._sz)
+            );
 
             // reduce matrix multiplication cost by precalculating
-            let sin = Math.sin(this._rotation);
-            let cos = Math.cos(this._rotation);
+            /*let sin = Math.sin(this._rx);
+            let cos = Math.cos(this._rx);
 
             this._matrix = [
-                cos * this.scale.x, sin * this.scale.x, 0, 0,
-                -sin * this.scale.y, cos * this.scale.y, 0, 0,
-                0, 0, 1, 0,
-                this.position.x, this.position.y, this.position.z, 1
-            ];
+                cos * this.scale.x, -sin * this.scale.x, 0, this.position.x,
+                sin * this.scale.y, cos * this.scale.y, 0, this.position.y,
+                0, 0, 1, this.position.z,
+                0, 0, 0, 1
+            ];*/
 
             if (this._parent) {
                 this._matrix = mul(this._parent.matrix, this._matrix);
@@ -78,172 +186,73 @@ class RenderObject {
             for (const child of this._children) {
                 child._staleMatrix = true
             }
+            this._staleMatrix = false;
         }
 
         return this._matrix;
     }
 
-    private get staleMatrix() { return this._staleMatrix || this._parent?.staleMatrix; }
+    constructor(mesh?: Mesh) {
+        this.mesh = mesh;
 
-    constructor();
-    constructor(vertices: number[], uvs: number[], color: number[]);
-    constructor(vertices?: number[], uvs?: number[], color?: number[]) {
         const ref = this;
         this.position = {
-            _x: 0,
-            _y: 0,
-            _z: 0,
-            get x() { return this._x; },
-            get y() { return this._y; },
-            get z() { return this._z; },
-            set x(v: number) {
-                if (this._x != v) {
-                    this._x = v;
-                    ref._staleMatrix = true;
-                }
-            },
-            set y(v: number) {
-                if (this._y != v) {
-                    this._y = v;
-                    ref._staleMatrix = true;
-                }
-            },
-            set z(v: number) {
-                if (this._z != v) {
-                    this._z = v;
-                    ref._staleMatrix = true;
-                }
-            },
+            get x() { return ref._px; },
+            get y() { return ref._py; },
+            get z() { return ref._pz; },
+            set x(v: number) { if (v != ref._px) { ref._px = v; ref._staleMatrix = true; } },
+            set y(v: number) { if (v != ref._py) { ref._py = v; ref._staleMatrix = true; } },
+            set z(v: number) { if (v != ref._pz) { ref._pz = v; ref._staleMatrix = true; } },
         };
-
+        this.rotation = {
+            get x() { return ref._rx; },
+            get y() { return ref._ry; },
+            get z() { return ref._rz; },
+            set x(v: number) { if (v != ref._rx) { ref._rx = v; ref._staleMatrix = true; } },
+            set y(v: number) { if (v != ref._ry) { ref._ry = v; ref._staleMatrix = true; } },
+            set z(v: number) { if (v != ref._rz) { ref._rz = v; ref._staleMatrix = true; } },
+        };
         this.scale = {
-            _x: 1,
-            _y: 1,
-            get x() { return this._x; },
-            get y() { return this._y; },
-            set x(v: number) {
-                if (this._x != v) {
-                    this._x = v;
-                    ref._staleMatrix = true;
-                }
-            },
-            set y(v: number) {
-                if (this._y != v) {
-                    this._y = v;
-                    ref._staleMatrix = true;
-                }
-            },
+            get x() { return ref._sx; },
+            get y() { return ref._sy; },
+            get z() { return ref._sz; },
+            set x(v: number) { if (v != ref._sx) { ref._sx = v; ref._staleMatrix = true; } },
+            set y(v: number) { if (v != ref._sy) { ref._sy = v; ref._staleMatrix = true; } },
+            set z(v: number) { if (v != ref._sz) { ref._sz = v; ref._staleMatrix = true; } },
         };
+    }
 
-        if (!vertices && !uvs) {
-            // Empty object
+    Translate(pos: Vector3) {
+        this._px += pos.x;
+        this._py += pos.y;
+        this._pz += pos.z;
+        this._staleMatrix = true;
+    }
+
+    draw(canvasInfo: ShaderProgram) {
+        if (this.onUpdate) {
+            this.onUpdate();
+        }
+
+        if (!this.visible) {
             return;
         }
 
-        if (vertices.length != uvs.length) {
-            throw "Vertices and Uvs have to have the same length";
+        let gl: WebGL2RenderingContext = canvasInfo.gl;
+
+        if (this.mesh) {
+            gl.uniformMatrix4fv(canvasInfo.uniformLocations.modelViewMatrix, true, this.matrix);
+            gl.bindTexture(gl.TEXTURE_2D, this.texture); // shit array
+
+            gl.bindVertexArray(this.mesh.vao);
+            gl.drawArrays(this.mesh.type, 0, this.mesh.vertices);
         }
-        if (vertices.length * 2 != color.length) {
-            throw "Each vertex requires a color with 4 elements";
+
+        for (const child of this._children) {
+            child.draw(canvasInfo);
         }
-
-        const vao = gl.createVertexArray();
-        gl.bindVertexArray(vao);
-
-        // Create a buffer for the square's positions.
-        const vert = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, vert);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-
-        gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
-
-        const uv = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, uv);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
-
-        gl.vertexAttribPointer(programInfo.attribLocations.vertexUv, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(programInfo.attribLocations.vertexUv);
-
-        const col = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, col);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(color), gl.STATIC_DRAW);
-
-        gl.vertexAttribPointer(programInfo.attribLocations.vertexColor, 4, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
-
-        this.mesh = {
-            vao,
-            vert,
-            uv,
-            col,
-            vertices: vertices.length / 2,
-            type: gl.TRIANGLES
-        };
-    }
-
-    updateData(vertices: number[], uvs: number[], color: number[]) {
-        throw "Not implemented";
     }
 }
-
-let container = document.getElementById("canvasContainer") as HTMLDivElement;
-let canvas = document.getElementById("mainCanvas") as HTMLCanvasElement;
-let gl: WebGL2RenderingContext;
-
-let root = new Set<RenderObject>();
-
-let width = 1024;
-let height = 900;
-
-let projectionMatrix;
-
-let programInfo: {
-    program: WebGLProgram,
-    attribLocations: {
-        vertexPosition: number,
-        vertexUv: number,
-        vertexColor: number,
-    },
-    uniformLocations: {
-        projectionMatrix: WebGLUniformLocation,
-        modelViewMatrix: WebGLUniformLocation
-    }
-};
-
-const vsSource =
-    `attribute vec2 vertex;
-attribute vec2 uv;
-attribute vec4 color;
-
-varying vec2 Uv;
-varying vec4 Color;
-
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-
-void main() {
-    gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(vertex, 0, 1);
-
-    Uv = uv;
-    Color = color;
-}`;
-
-const fsSource =
-    `precision mediump float;
-
-varying vec2 Uv;
-varying vec4 Color;
-
-uniform sampler2D texture;
-
-void main() {
-    vec4 col = texture2D(texture, Uv) * Color;
-    if(col.a < 0.1) {
-        discard;
-    }
-    gl_FragColor = col;
-}`;
 
 class FontAtlas {
     private texture: WebGLTexture;
@@ -292,7 +301,7 @@ class FontAtlas {
         return width;
     }
 
-    createTextObject(text: string, size: number, center = false, color = [1, 1, 1, 1]) {
+    createTextObject(canvasInfo, text: string, size: number, center = false, color = [1, 1, 1, 1]) {
         let verts = [];
         let uvs = [];
         let colors = [];
@@ -380,7 +389,7 @@ class FontAtlas {
             }
         }
 
-        let obj = new RenderObject(verts, uvs, colors);
+        let obj = new RenderObject(new Mesh(canvasInfo, verts, uvs, colors));
         obj.texture = this.texture;
         return {
             obj,
@@ -389,9 +398,9 @@ class FontAtlas {
         };
     }
 
-    static async createFont(name = "aldrich_regular_64", width: number, height: number) {
+    static async createFont(gl: WebGL2RenderingContext, name: string, width: number, height: number) {
         let obj = new FontAtlas();
-        obj.texture = loadTexture(`./img/${name}.png`);
+        obj.texture = loadTexture(gl, `./img/${name}.png`);
 
         let text = await (await (fetch(`./img/${name}.xml`))).text();
         let parser = new DOMParser();
@@ -445,7 +454,7 @@ class FontAtlas {
     }
 }
 
-function loadShader(type, source) {
+function loadShader(gl: WebGL2RenderingContext, type: GLenum, source: string) {
     const shader = gl.createShader(type);
 
     // Send the source to the shader object
@@ -467,28 +476,129 @@ function loadShader(type, source) {
     return shader;
 }
 
-function initShaderProgram(vsSource, fsSource) {
-    const vertexShader = loadShader(gl.VERTEX_SHADER, vsSource);
-    const fragmentShader = loadShader(gl.FRAGMENT_SHADER, fsSource);
+class ShaderProgram {
+    gl: WebGL2RenderingContext;
+    program: WebGLProgram;
 
-    // Create the shader program
+    attribLocations: { vertex: number, uv: number, color: number };
+    uniformLocations: { projectionMatrix: WebGLUniformLocation, modelViewMatrix: WebGLUniformLocation };
 
-    const shaderProgram = gl.createProgram();
-    gl.attachShader(shaderProgram, vertexShader);
-    gl.attachShader(shaderProgram, fragmentShader);
-    gl.linkProgram(shaderProgram);
+    vertexSize = 3;
+    uvSize = 2;
 
-    // If creating the shader program failed, alert
+    constructor(gl: WebGL2RenderingContext, vsSource: string, fsSource: string) {
+        this.gl = gl;
 
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-        alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
-        return null;
+        const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+        // Create the shader program
+
+        this.program = gl.createProgram();
+        gl.attachShader(this.program, vertexShader);
+        gl.attachShader(this.program, fragmentShader);
+        gl.linkProgram(this.program);
+
+        gl.deleteShader(vertexShader);
+        gl.deleteShader(fragmentShader);
+
+        // If creating the shader program failed, alert
+
+        if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+            alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(this.program));
+            throw "Error";
+        }
+
+        this.attribLocations = {
+            vertex: gl.getAttribLocation(this.program, 'vertex'),
+            uv: gl.getAttribLocation(this.program, 'uv'),
+            color: gl.getAttribLocation(this.program, 'color')
+        };
+        this.uniformLocations = {
+            projectionMatrix: gl.getUniformLocation(this.program, 'uProjectionMatrix'),
+            modelViewMatrix: gl.getUniformLocation(this.program, 'uModelViewMatrix')
+        };
     }
 
-    return shaderProgram;
+    use() {
+        this.gl.useProgram(this.program);
+    }
 }
 
-function loadTexture(src: string | HTMLImageElement) {
+abstract class Renderer {
+    protected container: HTMLElement;
+    protected canvas: HTMLCanvasElement;
+    protected gl: WebGL2RenderingContext;
+
+    protected root = new Set<RenderObject>();
+
+    protected width: number;
+    protected height: number;
+
+    protected shader: ShaderProgram;
+
+    protected mouseX: number;
+    protected mouseY: number;
+    protected mouseDown: number;
+
+    protected Time = {
+        deltaTime: 0,
+        time: 0
+    };
+
+    constructor(canvas: HTMLCanvasElement, container: HTMLElement) {
+        this.container = container;
+        this.canvas = canvas;
+        this.gl = canvas.getContext("webgl2");
+
+        /*canvas.addEventListener("mousemove", (e) => {
+            this.mouseX = e.offsetX;
+            this.mouseY = e.offsetY;
+        });*/
+    }
+
+    start() {
+        let ref = this;
+        function draw() {
+            let now = performance.now() / 1000;
+            ref.Time.deltaTime = now - ref.Time.time;
+            ref.Time.time = now;
+
+            ref.update();
+
+            if (ref.container.clientWidth != ref.width || ref.container.clientHeight != ref.height) {
+                ref.resize(ref.container.clientWidth, ref.container.clientHeight);
+            }
+
+            ref.gl.clear(ref.gl.COLOR_BUFFER_BIT | ref.gl.DEPTH_BUFFER_BIT);
+
+            for (const item of ref.root) {
+                item.draw(ref.shader);
+            }
+
+            requestAnimationFrame(draw);
+        }
+        requestAnimationFrame(draw);
+    }
+    resize(w: number, h: number) {
+        this.width = w;
+        this.height = h;
+
+        this.canvas.width = w;
+        this.canvas.height = h;
+
+        this.gl.viewport(0, 0, w, h);
+        let projectionMatrix = this.createProjection();
+        this.gl.uniformMatrix4fv(this.shader.uniformLocations.projectionMatrix, true, projectionMatrix);
+    }
+
+    // called at the start of each frame
+    update() { };
+    abstract init(): any;
+    abstract createProjection(): Float32Array;
+}
+
+function loadTexture(gl: WebGL2RenderingContext, src: string | HTMLImageElement) {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
 
@@ -554,114 +664,4 @@ function loadTexture(src: string | HTMLImageElement) {
     return texture;
 }
 
-function isPowerOf2(value) {
-    return (value & (value - 1)) == 0;
-}
-
-document.addEventListener("DOMContentLoaded", main);
-
-function addObject(obj: RenderObject) {
-    root.add(obj);
-}
-function removeObject(obj: RenderObject) {
-    root.delete(obj);
-}
-
-function updateProjection() {
-    projectionMatrix = createOrtho(0, width, 0, height, 10, -10);
-    gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
-}
-
-function resize(w: number, h: number) {
-    width = w;
-    height = h;
-
-    canvas.width = w;
-    canvas.height = h;
-
-    gl.viewport(0, 0, w, h);
-    updateProjection();
-}
-
-let rendering = false;
-function startRenderLoop() {
-    rendering = true;
-    requestAnimationFrame(draw);
-}
-
-function stopRenderLoop() {
-    rendering = false;
-}
-
-async function main() {
-    gl = canvas.getContext("webgl2");
-
-    const shaderProgram = initShaderProgram(vsSource, fsSource);
-
-    programInfo = {
-        program: shaderProgram,
-        attribLocations: {
-            vertexPosition: gl.getAttribLocation(shaderProgram, 'vertex'),
-            vertexUv: gl.getAttribLocation(shaderProgram, "uv"),
-            vertexColor: gl.getAttribLocation(shaderProgram, "color")
-        },
-        uniformLocations: {
-            projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
-            modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
-        },
-    };
-
-    gl.useProgram(programInfo.program);
-
-    gl.clearColor(0.5, 0.5, 0.5, 1.0);  // Clear to gray, fully opaque
-    gl.clearDepth(1.0);                 // Clear everything
-    gl.enable(gl.DEPTH_TEST);           // Enable depth testing
-    gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
-
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE);
-    gl.enable(gl.BLEND);
-
-    resize(container.clientWidth, container.clientHeight);
-
-    // requestAnimationFrame(draw);
-}
-
-function draw() {
-    if (container.clientWidth != width || container.clientHeight != height) {
-        resize(container.clientWidth, container.clientHeight);
-    }
-
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    for (const item of root) {
-        if (item.onUpdate) {
-            item.onUpdate();
-        }
-
-        if (!item.visible) {
-            continue;
-        }
-
-        gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, item.matrix);
-
-        if (item.texture != undefined) {
-            gl.bindTexture(gl.TEXTURE_2D, item.texture);
-        }
-
-        gl.bindVertexArray(item.mesh.vao);
-        gl.drawArrays(item.mesh.type, 0, item.mesh.vertices);
-    }
-
-    if (rendering) {
-        requestAnimationFrame(draw);
-    }
-}
-
-let canvasInfo = {
-    get canvas() { return canvas; },
-    get width() { return width; },
-    get height() { return height; }
-}
-
-export { addObject, removeObject, RenderObject, loadTexture, canvasInfo, startRenderLoop, stopRenderLoop, FontAtlas }
+export { Mesh, RenderObject, FontAtlas, loadTexture, Vector3, ShaderProgram, Renderer }

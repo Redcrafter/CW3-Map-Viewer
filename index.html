@@ -26,9 +26,29 @@
             </div>
         </div>
         <div id="colonialSpace" style="display: none;">
-            <div id="select"></div>
-            <div id="container"></div>
+            <div id="select">
+                <select id="gameSelect">
+                    <option value="cw3">Creeper World 3</option>
+                    <option value="cw4">Creeper World 4</option>
+                </select>
+                <div>
+                    <input id="search" type="text" placeholder="Search">
+                </div>
+                <div>
+                    Sort order
+                    <select id="order">
+                        <option>Newest</option>
+                        <option>Rating</option>
+                        <option>Scores</option>
+                        <option>Average Time</option>
+                        <option>Size</option>
+                        <option>Random</option>
+                    </select>
+                    Rev<input id="reverse" type="checkbox"> 
+                </div>
+            </div>
             <div id="pageSelection"></div>
+            <div id="container"></div>
         </div>
         <div id="mapEditor" style="display: none;">
             <div id="leftTabBar">
@@ -38,7 +58,7 @@
             </div>
             <div id="leftNav">
                 <div id="generalTab">
-                    <button id="flipV" disabled>Flip vertically</button>
+                    <!-- <button id="flipV" disabled>Flip vertically</button>
                     <button id="flipH" disabled>Flip horizontally</button>
                     <button id="rotR" disabled>Rotate right</button>
                     <button id="rotL" disabled>Rotate left</button>
@@ -50,7 +70,7 @@
                         <label>Height:</label><input type="number" id="inputH" min="1" max="512" disabled><br>
                         <button id="resize" title="Resize the map without changing map data" disabled>Resize</button>
                         <button id="scale" title="Stretch the map to the specified size" disabled>Scale</button>
-                    </div>
+                    </div> -->
                 </div>
                 <div id="scriptTab" style="display: none;">
 

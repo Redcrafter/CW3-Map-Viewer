@@ -163,8 +163,18 @@ class ColonialSpace {
         return `https://knucklecracker.com/creeperworld3/queryMaps.php?query=thumbnail&guid=${this.Md5}`;
     }
     async download() {
-        return await (await fetch(`https://knucklecracker.com/creeperworld3/queryMaps.php?query=map&guid=${this.Md5}`)).arrayBuffer();
+        let buffer = await (await fetch(`https://knucklecracker.com/creeperworld3/queryMaps.php?query=map&guid=${this.Md5}`)).arrayBuffer();
+        return await new Promise(resolve => {
+            decompress(buffer, resolve);
+        });
     }
+}
+function decompress(buffer, callback) {
+    let arr = new Uint8Array(buffer);
+    LZMA.decompress(arr, (result) => {
+        let parser = new DOMParser();
+        callback(new Game(parser.parseFromString(result, "text/xml")));
+    });
 }
 async function fetchMapList() {
     let plain = new TextDecoder("utf-8").decode(new Zlib.Gunzip(new Uint8Array(await (await fetch("https://knucklecracker.com/creeperworld3/queryMaps.php?query=maplist")).arrayBuffer())).decompress());
@@ -176,5 +186,4 @@ async function fetchMapList() {
     }
     return list;
 }
-export { ColonialSpace, fetchMapList };
-export { Game, Info, Terrain, Unit };
+export { ColonialSpace, Game, Info, Terrain, Unit, fetchMapList, decompress };

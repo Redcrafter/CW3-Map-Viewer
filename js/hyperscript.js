@@ -11,6 +11,8 @@ function flatten(children) {
     return res;
 }
 function hyperscript(tag, props, ...children) {
+    if (!props)
+        props = {};
     return { tag, props, children: flatten(children) };
 }
 function domDiff(element, container, childIndex) {
@@ -20,8 +22,7 @@ function domDiff(element, container, childIndex) {
     }
     if (typeof element == "string" || typeof element == "number") {
         if (el instanceof Text) {
-            if (el.textContent !== element)
-                el.textContent = element;
+            el.textContent = element;
         }
         else {
             if (el)
@@ -35,7 +36,7 @@ function domDiff(element, container, childIndex) {
                 container.removeChild(el);
             }
             el = document.createElement(element.tag);
-            container.appendChild(el);
+            container.insertBefore(el, container.childNodes[childIndex]);
             for (const key in element.props) {
                 let item = element.props[key];
                 if (key == "onclick") {
@@ -71,7 +72,7 @@ function domDiff(element, container, childIndex) {
                 pos++;
             }
         }
-        while (el.children.length > pos) {
+        while (el.childNodes.length > pos) {
             el.removeChild(el.lastChild);
         }
     }

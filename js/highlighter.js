@@ -60,7 +60,7 @@ let constFunctions = new Set([
     "k"
 ]);
 function isNumber(str) {
-    return !isNaN(str) &&
+    return !Number.isNaN(str) &&
         !isNaN(parseFloat(str));
 }
 function error(message) {

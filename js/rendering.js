@@ -1,33 +1,50 @@
 import { mul, rotateX, rotateY, rotateZ, scale, translate } from "./matrix.js";
 class Mesh {
     constructor(shader, vertices, uvs, color) {
-        if (vertices.length / shader.vertexSize != uvs.length / shader.uvSize) {
-            throw "Vertices and Uvs have to have the same length";
-        }
-        if (vertices.length / shader.vertexSize != color.length / 4) {
-            throw "Each vertex requires a color with 4 elements";
-        }
+        this.shader = shader;
         let gl = shader.gl;
         let attribLocations = shader.attribLocations;
         this.vao = gl.createVertexArray();
         gl.bindVertexArray(this.vao);
         this.vert = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vert);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
         gl.vertexAttribPointer(attribLocations.vertex, shader.vertexSize, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(attribLocations.vertex);
         this.uv = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.uv);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
         gl.vertexAttribPointer(attribLocations.uv, shader.uvSize, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(attribLocations.uv);
         this.col = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.col);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(color), gl.STATIC_DRAW);
         gl.vertexAttribPointer(attribLocations.color, 4, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(attribLocations.color);
-        this.vertices = vertices.length / 2;
+        if (vertices) {
+            this.update(vertices, uvs, color);
+        }
+    }
+    update(vertices, uvs, color) {
+        if (vertices.length / this.shader.vertexSize != uvs.length / this.shader.uvSize) {
+            throw "Vertices and Uvs have to have the same length";
+        }
+        if (vertices.length / this.shader.vertexSize != color.length / 4) {
+            throw "Each vertex requires a color with 4 elements";
+        }
+        let gl = this.shader.gl;
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vert);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uv);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.col);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(color), gl.STATIC_DRAW);
+        this.vertices = vertices.length / this.shader.vertexSize;
         this.type = gl.TRIANGLES;
+    }
+    delete() {
+        let gl = this.shader.gl;
+        gl.deleteVertexArray(this.vao);
+        gl.deleteBuffer(this.vert);
+        gl.deleteBuffer(this.uv);
+        gl.deleteBuffer(this.col);
     }
 }
 class Vector3 {
@@ -378,6 +395,10 @@ class Renderer {
         this.container = container;
         this.canvas = canvas;
         this.gl = canvas.getContext("webgl2");
+        canvas.addEventListener("mousemove", (e) => {
+            this.mouseX = e.offsetX;
+            this.mouseY = e.offsetY;
+        });
     }
     start() {
         let ref = this;

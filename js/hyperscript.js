@@ -15,6 +15,20 @@ function hyperscript(tag, props, ...children) {
         props = {};
     return { tag, props, children: flatten(children) };
 }
+function addProps(el, props) {
+    for (const key in props) {
+        let item = props[key];
+        if (key == "oninput") {
+            el.oninput = item;
+        }
+        else if (key == "onclick") {
+            el.onclick = item;
+        }
+        else {
+            el.setAttribute(key, item);
+        }
+    }
+}
 function domDiff(element, container, childIndex) {
     let el = container.childNodes[childIndex];
     if (!element) {
@@ -37,15 +51,7 @@ function domDiff(element, container, childIndex) {
             }
             el = document.createElement(element.tag);
             container.insertBefore(el, container.childNodes[childIndex]);
-            for (const key in element.props) {
-                let item = element.props[key];
-                if (key == "onclick") {
-                    el.onclick = item;
-                }
-                else {
-                    el.setAttribute(key, item);
-                }
-            }
+            addProps(el, element.props);
         }
         else {
             for (const item of el.attributes) {
@@ -53,17 +59,7 @@ function domDiff(element, container, childIndex) {
                     el.removeAttribute(item.nodeName);
                 }
             }
-            for (const key in element.props) {
-                const val = element.props[key];
-                if (key == "onclick") {
-                    el.onclick = val;
-                }
-                else {
-                    if (el.getAttribute(key) != val) {
-                        el.setAttribute(key, val);
-                    }
-                }
-            }
+            addProps(el, element.props);
         }
         let pos = 0;
         for (const item of element.children) {
@@ -88,5 +84,30 @@ function render(element, container) {
     }
     else {
         domDiff(element, container, 0);
+    }
+}
+function createElements(element) {
+    function create(element) {
+        if (typeof element === "string") {
+            return document.createTextNode(element);
+        }
+        else {
+            let el = document.createElement(element.tag);
+            addProps(el, element.props);
+            for (const item of element.children) {
+                el.appendChild(create(item));
+            }
+            return el;
+        }
+    }
+    if (element instanceof Array) {
+        let ret = [];
+        for (const item of element) {
+            ret.push(create(item));
+        }
+        return ret;
+    }
+    else {
+        return create(element);
     }
 }

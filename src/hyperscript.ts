@@ -23,6 +23,22 @@ function hyperscript(tag: string, props: Object, ...children: any[]): El {
     return { tag, props, children: flatten(children) }
 }
 
+function addProps(el: HTMLElement, props: Object) {
+    for (const key in props) {
+        let item = props[key];
+
+        if(key == "oninput") {
+            el.oninput = item;
+        } else if(key == "onclick") {
+            el.onclick = item;
+        } else /*if(key.startsWith("on")) {
+            el.addEventListener(key.substr(2), item);
+        } else*/ {
+            el.setAttribute(key, item);
+        }
+    }
+}
+
 /**
  * 
  * @param element element to render
@@ -51,18 +67,7 @@ function domDiff(element: El | string, container: HTMLElement, childIndex: numbe
             }
             el = document.createElement(element.tag);
             container.insertBefore(el, container.childNodes[childIndex]);
-
-            for (const key in element.props) {
-                let item = element.props[key];
-
-                if(key == "onclick") {
-                    el.onclick = item;
-                } else /*if(key.startsWith("on")) {
-                    el.addEventListener(key.substr(2), item);
-                } else*/ {
-                    el.setAttribute(key, item);
-                }
-            }
+            addProps(el, element.props);            
         } else {
             for (const item of el.attributes) {
                 if (!element.props.hasOwnProperty(item.nodeName)) {
@@ -70,19 +75,7 @@ function domDiff(element: El | string, container: HTMLElement, childIndex: numbe
                 }
             }
 
-            for (const key in element.props) {
-                const val = element.props[key];
-
-                if(key == "onclick") {
-                    el.onclick = val;
-                } else /*if(key.startsWith("on")) {
-                    el.addEventListener(key.substr(2), val);
-                } else*/ {
-                    if (el.getAttribute(key) != val) {
-                        el.setAttribute(key, val);
-                    }
-                }
-            }
+            addProps(el, element.props);
         }
 
         let pos = 0;
@@ -110,5 +103,34 @@ function render(element: El | El[] | string, container: HTMLElement) {
         }
     } else {
         domDiff(element, container, 0);
+    }
+}
+
+function createElements(element: El | El[] | string) {
+    function create(element: El | string) {
+        if(typeof element === "string") {
+            return document.createTextNode(element);
+        } else {
+            let el = document.createElement(element.tag);
+            addProps(el, element.props);
+
+            for (const item of element.children) {
+                el.appendChild(create(item));
+            }
+
+            return el;
+        }
+    }
+
+    if(element instanceof Array) {
+        let ret = [];
+
+        for (const item of element) {
+            ret.push(create(item));
+        }
+
+        return ret;
+    } else {
+        return create(element);
     }
 }

@@ -1,6 +1,6 @@
 //Braindead decoder that assumes fully valid input
-function decodeUTF16LE(binaryStr) {
-    var cp = [];
+function decodeUTF16LE(binaryStr: string) {
+    var cp: number[] = [];
     for (var i = 0; i < binaryStr.length; i += 2) {
         cp.push(
             binaryStr.charCodeAt(i) |
@@ -8,23 +8,42 @@ function decodeUTF16LE(binaryStr) {
         );
     }
 
-    return String.fromCharCode.apply(String, cp);
+    return String.fromCharCode(...cp);
+}
+
+function encodeUTF16LE(str: string) {
+    let out: number[] = [];
+
+    for (let i = 0; i < str.length; i++) {
+        let code = str.charCodeAt(i);
+        out.push(code & 0xFF, (code >> 8) & 0xFF);
+    }
+
+    return String.fromCharCode(...out);
 }
 
 class Game {
-    // UnitSettings
+    private UnitSettings: any;
     public Info: Info;
     public CustomImages: CustomImage[];
-    // CustomCharacters
+    private CustomCharacters: any;
     public Units: Unit[];
-    // Ammo
-    // Packets
+    private Ammo: any;
+    private Packets: any;
     public Terrain: Terrain;
-    // Creeper
-    // Digitalis
+    private Creeper: any;
+    private Digitalis: any;
     public Scripts: Script[];
 
     constructor(data: Document) {
+        this.UnitSettings = data.querySelector("UnitSettings");
+        this.CustomCharacters = data.querySelector("CustomCharacters");
+        this.Ammo = data.querySelector("Ammo");
+        this.Packets = data.querySelector("Packets");
+        this.Creeper = data.querySelector("Creeper");
+        this.Digitalis = data.querySelector("Digitalis");
+
+
         this.Info = new Info(data.querySelector("Info"));
         this.Terrain = new Terrain(data.querySelector("Terrain"));
 
@@ -35,8 +54,8 @@ class Game {
 
         this.Scripts = [];
         let scripts = data.querySelector("scripts");
-        if (scripts && scripts.innerHTML.trim() != "") {
-            for (const item of scripts.innerHTML.split(",")) {
+        if (scripts && scripts.textContent.trim() != "") {
+            for (const item of scripts.textContent.split(",")) {
                 this.Scripts.push(new Script(item));
             }
         }
@@ -45,6 +64,29 @@ class Game {
         for (const item of data.querySelector("CustomImages").children) {
             this.CustomImages.push(new CustomImage(item));
         }
+    }
+
+    save(doc: XMLDocument) {
+        let game = doc.createElement("Game");
+
+        game.append(this.UnitSettings);
+        game.append(this.Info.save(doc));
+        game.append(saveArray(doc, "CustomImages", this.CustomImages));
+        game.append(this.CustomCharacters);
+        game.append(saveArray(doc, "Units", this.Units));
+        game.append(this.Ammo);
+        game.append(this.Packets);
+        game.append(this.Terrain.save(doc));
+        game.append(this.Creeper);
+        game.append(this.Digitalis);
+
+        let Scripts = doc.createElement("Scripts");
+        let scripts = doc.createElement("scripts");
+        scripts.innerHTML = this.Scripts.map(x => `${x.name};${btoa(encodeUTF16LE(x.code))}`).join(",");
+        Scripts.append(scripts);
+        game.append(Scripts);
+
+        doc.append(game);
     }
 }
 
@@ -57,7 +99,7 @@ class Info {
     public Artifact0 = 0;
     public Artifact1 = 0;
     public Artifact2 = 0;
-    public additionalScore = 0;
+    public additionalScore;
     public cnTimer0 = 0;
     public cnTimer1 = 0;
     public cnTimer2 = 0;
@@ -69,6 +111,8 @@ class Info {
     public alternateControlMode = false;
     public gameVersion = 2.12;
     public Messages: { speaker: number, message: string }[] = [];
+
+    public unitHasBeenDamaged: boolean;
 
     constructor(info: Element) {
         this.Width = parseInt(info.querySelector("Width").textContent);
@@ -105,6 +149,63 @@ class Info {
                 });
             }
         }
+
+        if(info.querySelector("unitHasBeenDamaged")) {
+            this.unitHasBeenDamaged = info.querySelector("unitHasBeenDamaged").textContent == "True";
+        }
+    }
+
+    save(doc: XMLDocument) {
+        let info = doc.createElement("Info");
+        function add(val, name: string) {
+            if(val === undefined) return;
+
+            let el = doc.createElement(name);
+            if(typeof val == "boolean") {
+                el.textContent = val ? "True" : "False";
+            } else {
+                el.textContent = val.toString();                
+            }
+            info.append(el);
+        }
+
+        add(this.Width, "Width");
+        add(this.Height, "Height");
+
+        add(this.UpdateCount, "UpdateCount");
+        add(this.TotemEnergy, "TotemEnergy");
+        add(this.Artifact0, "Artifact0");
+        add(this.Artifact1, "Artifact1");
+        add(this.Artifact2, "Artifact2");
+        add(this.additionalScore, "additionalScore");
+        add(this.cnTimer0, "cnTimer0");
+        add(this.cnTimer1, "cnTimer1");
+        add(this.cnTimer2, "cnTimer2");
+        add(this.RandSeed, "RandSeed");
+
+        add(this.BorderVisible, "BorderVisible");
+        add(this.completed, "completed");
+        add(this.failed, "failed");
+        add(this.alternateControlMode, "alternateControlMode");
+        add(this.gameVersion, "gameVersion");
+
+        if(this.Messages.length != 0) {
+            let el = doc.createElement("Messages");
+            for (const message of this.Messages) {
+                let n = doc.createElement("Message");
+                let c = doc.createElement("c");
+                c.textContent = message.speaker.toString();
+                let m = doc.createElement("m");
+                m.textContent = message.message;
+
+                n.append(c, m);
+                el.append(n);
+            }
+            info.append(el);
+        }
+        add(this.unitHasBeenDamaged, "unitHasBeenDamaged");
+
+        return info;
     }
 }
 
@@ -135,20 +236,36 @@ class Unit {
     public ugsw?: number;
     public ugsh?: number;
 
-    data: Element;
+    // public pat?: number;
+
+    private data: Element;
 
     constructor(unit: Element) {
         this.data = unit;
         this.Type = unit.nodeName;
 
-        this.cX = parseInt(unit.querySelector("cX").textContent);
-        this.cY = parseInt(unit.querySelector("cY").textContent);
-        this.cZ = parseInt(unit.querySelector("cZ").textContent);
+        this.cX = parseFloat(unit.querySelector("cX").textContent);
+        this.cY = parseFloat(unit.querySelector("cY").textContent);
+        this.cZ = parseFloat(unit.querySelector("cZ").textContent);
 
         if (this.Type == "CRPLTower") {
-            this.ugsw = parseInt(unit.querySelector("ugsw").textContent);
-            this.ugsh = parseInt(unit.querySelector("ugsh").textContent);
+            this.ugsw = parseFloat(unit.querySelector("ugsw").textContent);
+            this.ugsh = parseFloat(unit.querySelector("ugsh").textContent);
         }
+    }
+
+    save(doc: XMLDocument) {
+        let el = this.data.cloneNode(true) as Element;
+        el.querySelector("cX").textContent = this.cX.toString();
+        el.querySelector("cY").textContent = this.cY.toString();
+        el.querySelector("cZ").textContent = this.cZ.toString();
+
+        if (this.Type == "CRPLTower") {
+            el.querySelector("ugsw").textContent = this.ugsw.toString();
+            el.querySelector("ugsh").textContent = this.ugsh.toString();
+        }
+
+        return el;
     }
 }
 
@@ -169,7 +286,11 @@ class CustomImage {
     public base64: string;
     public size: number;
 
+    private data: Element;
+
     constructor(item: Element) {
+        this.data = item;
+
         let id = parseInt(item.nodeName.substring(2));
         let customName = "custom";
         if (id < 90) {
@@ -200,6 +321,10 @@ class CustomImage {
         this.name = customName;
         this.base64 = item.textContent;
     }
+
+    save(doc: XMLDocument) {
+        return this.data.cloneNode(true);
+    }
 }
 
 class Terrain {
@@ -211,14 +336,36 @@ class Terrain {
     public terrainTextures: number[];
     public terrainBrightness: number[];
 
-    constructor(mapData: Element) {
-        this.terrain = mapData.querySelector("terrain").textContent.split(",").map(x => parseInt(x));
-        this.walls = mapData.querySelector("walls").textContent.split(",").map(x => parseInt(x));
-        this.terraformLevels = mapData.querySelector("terraformLevels").textContent.split(",").map(x => parseInt(x));
-        this.partialTerraform = mapData.querySelector("partialTerraform").textContent.split(",").map(x => parseInt(x));
+    // custom terrain images
+    private custer: string;
 
-        this.terrainTextures = mapData.querySelector("terrainTextures").textContent.split(",").map(x => parseInt(x));
-        this.terrainBrightness = mapData.querySelector("terrainBrightness").textContent.split(",").map(x => parseInt(x));
+    constructor(mapData: Element) {
+        this.terrain = splitArray(mapData.querySelector("terrain").textContent);
+        this.walls = splitArray(mapData.querySelector("walls").textContent);
+        this.terraformLevels = splitArray(mapData.querySelector("terraformLevels").textContent);
+        this.partialTerraform = splitArray(mapData.querySelector("partialTerraform").textContent);
+
+        this.terrainTextures = splitArray(mapData.querySelector("terrainTextures").textContent);
+        this.terrainBrightness = splitArray(mapData.querySelector("terrainBrightness").textContent);
+        if(mapData.querySelector("custer")) {
+            this.custer = atob(mapData.querySelector("custer").textContent);
+        }
+    }
+
+    save(doc: XMLDocument) {
+        let el = doc.createElement("Terrain");
+        el.append(fromArray(doc, "terrain", this.terrain));
+        el.append(fromArray(doc, "walls", this.walls));
+        el.append(fromArray(doc, "terraformLevels", this.terraformLevels));
+        el.append(fromArray(doc, "partialTerraform", this.partialTerraform));
+        el.append(fromArray(doc, "terrainTextures", this.terrainTextures));
+        el.append(fromArray(doc, "terrainBrightness", this.terrainBrightness));
+        if(this.custer) {
+            let a = doc.createElement("custer");
+            a.textContent = btoa(this.custer);
+            el.append(a);
+        }
+        return el;
     }
 }
 
@@ -267,13 +414,80 @@ class ColonialSpace {
     }
 }
 
+function splitArray(text: string) {
+    return text.split(",").map(x => parseInt(x));
+}
+function fromArray(doc: XMLDocument, name: string, elements: any[]) {
+    let el = doc.createElement(name);
+    el.textContent = elements.join(",");
+    return el;
+}
+
+function saveArray(doc: XMLDocument, name: string, elements: any[]) {
+    let el = doc.createElement(name);
+
+    for (const item of elements) {
+        el.append(item.save(doc));
+    }
+
+    return el;
+}
+
+function compare(a: Element, b: Element) {
+    if (a.tagName != b.tagName || a.children.length != b.children.length) {
+        debugger;
+        return false;
+    }
+
+    if(a.children.length == 0) {
+        if(a.textContent !== b.textContent) debugger;
+        return a.textContent === b.textContent;
+    } else {
+        for (let i = 0; i < a.children.length; i++) {
+            if (!compare(a.children[i], b.children[i])) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 function decompress(buffer: ArrayBuffer, callback: (game: Game) => any) {
     let arr = new Uint8Array(buffer);
-    
+
     LZMA.decompress(arr, (result) => {
         let parser = new DOMParser();
-        callback(new Game(parser.parseFromString(result, "text/xml")))
+
+        let el = parser.parseFromString(result, "text/xml");
+        let clone = el.cloneNode(true);
+        let g = new Game(el);
+
+        let doc = document.implementation.createDocument("", "");
+        g.save(doc);
+
+        if(!compare(clone.getRootNode(), doc.getRootNode())) {
+            debugger;
+        }
+
+        callback(g);
     });
+}
+
+async function compress(game: Game) {
+    let doc = document.implementation.createDocument("", "");
+
+    game.save(doc);
+
+    let serializer = new XMLSerializer();
+    let xmlString = serializer.serializeToString(doc);
+
+    return new Promise<number[]>(resolve => {
+        LZMA.compress(xmlString, 6, (result) => {
+            resolve(result);
+        });
+    });
+    
 }
 
 async function fetchMapList() {
@@ -296,4 +510,4 @@ async function fetchMapList() {
     return list;
 }
 
-export { ColonialSpace, Game, Info, Terrain, Unit, fetchMapList, decompress }
+export { ColonialSpace, Game, Info, Terrain, Unit, fetchMapList, decompress, compress }

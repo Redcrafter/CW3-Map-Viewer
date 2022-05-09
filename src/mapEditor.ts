@@ -182,9 +182,9 @@ function addTab(options: {
 
             topTabBar.removeChild(topEl);
         }
-        close.addEventListener("click", () => {
+        close.addEventListener("click", (e) => {
             closeTab();
-            return true;
+            e.stopPropagation();
         })
         topEl.addEventListener("mouseup", (e) => {
             if (e.button == 1) {

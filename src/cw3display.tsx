@@ -1,4 +1,4 @@
-import { Game } from "./cw3.js";
+import { Game, compress } from "./cw3.js";
 import { createOrtho } from "./matrix.js";
 import { FontAtlas, loadTexture, Mesh, Renderer, RenderObject, ShaderProgram } from "./rendering.js";
 import { produceHighlighted } from "./highlighter.js";
@@ -84,7 +84,7 @@ let defaultTextures = new Map<string, string>([
     ["PowerZone", "power.png"]
 ]);
 
-function genMapMesh(map: Game, shader: ShaderProgram) {
+function genMapMesh(map: Game) {
     let terrain = map.Terrain.terrain;
     let width = map.Info.Width;
     let height = map.Info.Height;
@@ -696,7 +696,7 @@ function genMapMesh(map: Game, shader: ShaderProgram) {
         }
     }
 
-    return new Mesh(shader, vertices, uvs, colors);
+    return { vertices, uvs, colors };
 }
 
 function parseTup(text: string) {
@@ -705,10 +705,28 @@ function parseTup(text: string) {
     return text.split(",").map(parseFloat);
 }
 
-function createImgEl(src : string) {
+function createImgEl(src: string) {
     let img = document.createElement("img");
     img.src = src;
     return img;
+}
+
+function download(data: BlobPart, filename: string) {
+    let file = new Blob([data]);
+    if (window.navigator.msSaveOrOpenBlob) { // IE10+
+        window.navigator.msSaveOrOpenBlob(file, filename);
+    } else { // Others
+        let a = document.createElement("a");
+        let url = URL.createObjectURL(file);
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 0);
+    }
 }
 
 export class cw3MapViewer extends Renderer {
@@ -720,19 +738,34 @@ export class cw3MapViewer extends Renderer {
 
     protected game: Game;
 
+    private customTextures: Map<string, { el: HTMLImageElement, tex?: WebGLTexture }>;
+
+
+    private elements: HTMLElement[];
+
+
     async init() {
+        let hoverInfo = document.createElement("span");
+        hoverInfo.innerText = "Height: N/A";
+        hoverInfo.id = "hoverInfo";
+
+        let canvasContainer = document.getElementById("canvasContainer");
+        canvasContainer.insertBefore(hoverInfo, canvasContainer.firstChild);
+
         this.canvas.addEventListener("mousemove", (e) => {
-            this.mouseX = (e.offsetX - this.mapParent.position.x) / this.mapParent.scale.x;
-            this.mouseY = (e.offsetY - this.mapParent.position.y) / this.mapParent.scale.y;
-        
-            // let x = Math.floor(this.mouseX);
-            // let y = Math.floor(this.mouseY);
-        
-            /*if (x < 0 || x >= this.game.Info.Width || y < 0 || y >= this.game.Info.Height) {
+            if (!this.game) return;
+            let mouseX = (e.offsetX - this.mapParent.position.x) / this.mapParent.scale.x;
+            let mouseY = (e.offsetY - this.mapParent.position.y) / this.mapParent.scale.y;
+
+            let x = Math.floor(mouseX);
+            let y = Math.floor(mouseY);
+
+            if (x < 0 || x >= this.game.Info.Width || y < 0 || y >= this.game.Info.Height) {
                 hoverInfo.innerText = "Height: N/A";
             } else {
-                hoverInfo.innerText = `Height: ${currentMap.Terrain.terrain[x + y * currentMap.Info.Width]}`;
-            }*/
+                let h = this.game.Terrain.terrain[x + y * this.game.Info.Width];
+                hoverInfo.innerText = `Height: ${h == 500 ? "void" : h}`;
+            }
         });
         let mouseDown = false;
         this.canvas.addEventListener("mousedown", () => {
@@ -756,29 +789,32 @@ export class cw3MapViewer extends Renderer {
                 // Down
                 factor = 1 / 1.1;
             }
-        
+
             this.mapParent.scale.x *= factor;
             this.mapParent.scale.y *= factor;
-        
+
             this.mapParent.position.x = factor * (this.mapParent.position.x - e.offsetX) + e.offsetX;
             this.mapParent.position.y = factor * (this.mapParent.position.y - e.offsetY) + e.offsetY;
         });
 
-        {
-            let div = document.createElement("div");
-            let check = document.createElement("input");
-            let label = document.createElement("label");
-            
-            check.setAttribute("type", "checkbox");
-            label.innerText= "Hide units";
-    
-            check.addEventListener("input", (e) => {
-                this.unitParent.visible = !check.checked;
-            });
-            div.append(check, label);
-            leftTabs.general.tab.append(div);
-        }
-    
+        this.elements = createElements([
+            <button onclick={() => this.flipVertical()} >Flip vertically</button>,
+            <button onclick={() => this.flipHorizontal()}>Flip horizontally</button>,
+            <button onclick={() => this.rotateR()}>Rotate right</button>,
+            <button onclick={() => this.rotateL()}>Rotate left</button>,
+            <button onclick={() => this.invTer()}>Invert terrain</button>,
+            <button onclick={() => this.invTex()}>Invert textures</button>,
+            <div><input type="checkbox" oninput={(e) => this.unitParent.visible = !e.target.checked} /><label>Hide units</label></div>,
+            <div>
+                <label>Width: </label><input type="number" id="inputW" min="1" max="512" /><br />
+                <label>Height:</label><input type="number" id="inputH" min="1" max="512" /><br />
+                <button onclick={() => this._resize()} title="Resize the map without changing map data">Resize</button>
+                <button onclick={() => this.scale()} title="Stretch the map to the specified size">Scale</button>
+            </div>,
+            <button onclick={() => this.save()}>Save</button>
+        ]);
+        leftTabs.general.tab.append(...this.elements);
+
         let vsSource: string;
         let fsSource: string;
 
@@ -868,69 +904,11 @@ export class cw3MapViewer extends Renderer {
 
     loadMap(game: Game) {
         //#region Load game data
-        // currentMap = game;
+        this.game = game;
         // for (const item of actions) { document.getElementById(item.elementName).disabled = false; }
-        // inputW.value = game.Info.Width.toString();
-        // inputH.value = game.Info.Height.toString();
+        this.elements[7].children[1].value = game.Info.Width.toString();
+        this.elements[7].children[4].value = game.Info.Height.toString();
         //#endregion
-
-        let ref = this;
-
-        function makeUnit(x: number, y: number, z: number, size: number, name: string, color: [number, number, number, number]) {
-            let obj = new RenderObject(new Mesh(ref.shader, centerRect, rect, [
-                ...color,
-                ...color,
-                ...color,
-
-                ...color,
-                ...color,
-                ...color,
-            ]));
-
-            obj.position.x = x;
-            obj.position.y = y;
-            obj.position.z = z;
-
-            obj.scale.x = size;
-            obj.scale.y = size;
-
-            let img = customTextures.get(name);
-            if (!img.tex) {
-                img.tex = loadTexture(ref.gl, img.el);
-            }
-            obj.texture = img.tex;
-            obj.parent = ref.unitParent;
-
-            return obj;
-        }
-
-        function makeHoverText(x: number, y: number, w: number, h: number, text: string) {
-            // trim all lines
-            text = text.split("\n").map(x => x.trim()).join("\n");
-
-            let ret = ref.fontAtlas.createTextObject(ref.shader, text, 1, true);
-
-            let obj = ret.obj;
-            obj.position.x = x - ret.width / 2;
-            obj.position.y = y - ret.height;
-            obj.position.z = 9;
-            obj.parent = ref.unitParent;
-            obj.onUpdate = () => {
-                obj.visible =
-                    ref.mouseX > (x - w / 2) &&
-                    ref.mouseX < (x + w / 2) &&
-                    ref.mouseY > (y - h / 2) &&
-                    ref.mouseY < (y + h / 2);
-
-                let s = ref.mapParent.scale.x / 5;
-
-                obj.scale.x = 1 / s;
-                obj.scale.y = 1 / s;
-
-                obj.position.x = x - (ret.width / 2) / s;
-                obj.position.y = y - (ret.height) / s;
-            }
-        }
 
         let customTextures = new Map<string, { el: HTMLImageElement, tex?: WebGLTexture }>();
         for (const [name, file] of defaultTextures) {
@@ -956,16 +934,123 @@ export class cw3MapViewer extends Renderer {
             el.appendChild(img);
             leftTabs.image.images.appendChild(el);
         }
+        this.customTextures = customTextures;
 
-        let mapObj = new RenderObject(genMapMesh(game, this.shader));
+        this.createUnits();
+
+        let mapObj = new RenderObject();
         mapObj.parent = this.mapParent;
         // This is very hacky. The map has to be drawn before the units so before the unitParent
         // TODO: find a better way to do this
         this.mapParent.children.reverse();
+        this.updateMesh();
 
         mapObj.position.z = -1;
         // mapObj.texture = loadTexture(gl, "./img/atlas3-64textures.png");
         mapObj.texture = loadTexture(this.gl, "./img/testAtlas.png");
+
+        addTab({
+            name: "Map Editor",
+            closeAble: false,
+            mainEl: document.getElementById("canvasContainer")
+        });
+
+        for (const item of game.Scripts) {
+            let node = document.createElement("div");
+            node.innerText = item.name;
+
+            let tab: HTMLElement;
+            node.addEventListener("click", () => {
+                if (!tab) {
+                    tab = addTab({
+                        name: item.name,
+                        onClose: () => {
+                            tab = null;
+                        }
+                    });
+                    tab.classList.add("crplCode");
+
+                    let highlight = document.createElement("div");
+                    produceHighlighted(item.code, highlight);
+
+                    tab.appendChild(highlight);
+                }
+            });
+
+            leftTabs.script.tab.appendChild(node);
+        }
+
+        this.start();
+    }
+
+    async save() {
+        let dat = await compress(this.game);
+        download(new Uint8Array(dat), "save.cw3");
+    }
+
+    createUnits() {
+        let ref = this;
+
+        function makeUnit(x: number, y: number, z: number, size: number, name: string, color: [number, number, number, number]) {
+            let obj = new RenderObject(new Mesh(ref.shader, centerRect, rect, [
+                ...color,
+                ...color,
+                ...color,
+
+                ...color,
+                ...color,
+                ...color,
+            ]));
+
+            obj.position.x = x;
+            obj.position.y = y;
+            obj.position.z = z;
+
+            obj.scale.x = size;
+            obj.scale.y = size;
+
+            let img = ref.customTextures.get(name);
+            if (!img.tex) {
+                img.tex = loadTexture(ref.gl, img.el);
+            }
+            obj.texture = img.tex;
+            obj.parent = ref.unitParent;
+
+            return obj;
+        }
+
+        function makeHoverText(x: number, y: number, w: number, h: number, text: string) {
+            // trim all lines
+            text = text.split("\n").map(x => x.trim()).join("\n");
+
+            let ret = ref.fontAtlas.createTextObject(ref.shader, text, 1, true);
+
+            let obj = ret.obj;
+            obj.position.x = x - ret.width / 2;
+            obj.position.y = y - ret.height;
+            obj.position.z = 9;
+            obj.parent = ref.unitParent;
+            obj.onUpdate = () => {
+                let mouseX = (ref.mouseX - ref.mapParent.position.x) / ref.mapParent.scale.x;
+                let mouseY = (ref.mouseY - ref.mapParent.position.y) / ref.mapParent.scale.y;
+
+                obj.visible =
+                    mouseX > (x - w / 2) &&
+                    mouseX < (x + w / 2) &&
+                    mouseY > (y - h / 2) &&
+                    mouseY < (y + h / 2);
+
+                let s = ref.mapParent.scale.x / 5;
+
+                obj.scale.x = 1 / s;
+                obj.scale.y = 1 / s;
+
+                obj.position.x = x - (ret.width / 2) / s;
+                obj.position.y = y - (ret.height) / s;
+            }
+        }
+
+        let game = this.game;
 
         for (const unit of game.Units) {
             let cx = unit.cX / 8;
@@ -1115,51 +1200,55 @@ export class cw3MapViewer extends Renderer {
                         }
                     }
 
-                    for (const item of unit.data.querySelector("si").textContent.split(",")) {
-                        let [slot, text] = item.split(";");
-                        text = text.toLowerCase();
-                        if (text == "none") {
-                            continue;
+                    let si = unit.data.querySelector("si")
+                    if (si) {
+                        for (const item of si.textContent.split(",")) {
+                            let [slot, text] = item.split(";");
+                            text = text.toLowerCase();
+                            if (text == "none") {
+                                continue;
+                            }
+
+                            let loc = parseTup(unit.data.querySelector(`OD ${slot}-l`).textContent);
+                            let scale = parseTup(unit.data.querySelector(`OD ${slot}-s`).textContent);
+                            let rot = parseTup(unit.data.querySelector(`OD ${slot}-r`).textContent)[2];
+                            let color = parseTup(unit.data.querySelector(`OD ${slot}-c`).textContent);
+
+                            let img = this.customTextures.get(text);
+                            if (!img) {
+                                console.error("Missing texture", text);
+                                continue;
+                            }
+
+                            let w = 3 * scale[0];
+                            let h = 3 * scale[1];
+
+                            let obj = new RenderObject(new Mesh(this.shader, centerRect, rect, [
+                                ...color,
+                                ...color,
+                                ...color,
+
+                                ...color,
+                                ...color,
+                                ...color,
+                            ]));
+                            obj.position.x = cx + loc[0] / 8;
+                            obj.position.y = cy + loc[1] / 8;
+                            obj.position.z = cz - loc[2];
+
+                            obj.scale.x = w;
+                            obj.scale.y = h;
+
+                            obj.rotation.z = rot * Math.PI / 180;
+
+                            if (!img.tex) {
+                                img.tex = loadTexture(this.gl, img.el);
+                            }
+                            obj.texture = img.tex;
+                            obj.parent = this.unitParent;
                         }
-
-                        let loc = parseTup(unit.data.querySelector(`OD ${slot}-l`).textContent);
-                        let scale = parseTup(unit.data.querySelector(`OD ${slot}-s`).textContent);
-                        let rot = parseTup(unit.data.querySelector(`OD ${slot}-r`).textContent)[2];
-                        let color = parseTup(unit.data.querySelector(`OD ${slot}-c`).textContent);
-
-                        let img = customTextures.get(text);
-                        if (!img) {
-                            console.error("Missing texture", text);
-                            continue;
-                        }
-
-                        let w = 3 * scale[0];
-                        let h = 3 * scale[1];
-
-                        let obj = new RenderObject(new Mesh(this.shader, centerRect, rect, [
-                            ...color,
-                            ...color,
-                            ...color,
-
-                            ...color,
-                            ...color,
-                            ...color,
-                        ]));
-                        obj.position.x = cx + loc[0] / 8;
-                        obj.position.y = cy + loc[1] / 8;
-                        obj.position.z = cz - loc[2];
-
-                        obj.scale.x = w;
-                        obj.scale.y = h;
-
-                        obj.rotation.z = rot * Math.PI / 180;
-
-                        if (!img.tex) {
-                            img.tex = loadTexture(this.gl, img.el);
-                        }
-                        obj.texture = img.tex;
-                        obj.parent = this.unitParent;
                     }
+
                     break;
                 }
                 case "ProspectorArtifact": {
@@ -1185,38 +1274,292 @@ export class cw3MapViewer extends Renderer {
             }
 
         }
+    }
 
-        addTab({
-            name: "Map Editor",
-            closeAble: false,
-            mainEl: document.getElementById("canvasContainer")
-        });
+    updateMesh() {
+        let mesh = genMapMesh(this.game);
 
-        for (const item of game.Scripts) {
-            let node = document.createElement("div");
-            node.innerText = item.name;
+        let el = this.mapParent.children[0];
+        if (el.mesh) {
+            el.mesh.update(mesh.vertices, mesh.uvs, mesh.colors);
+        } else {
+            el.mesh = new Mesh(this.shader, mesh.vertices, mesh.uvs, mesh.colors);
+        }
+    }
 
-            let tab: HTMLElement;
-            node.addEventListener("click", () => {
-                if (!tab) {
-                    tab = addTab({
-                        name: item.name,
-                        onClose: () => {
-                            tab = null;
-                        }
-                    });
-                    tab.classList.add("crplCode");
+    // TODO: add transform function?
+    flipVertical() {
+        let ter = this.game.Terrain;
 
-                    let highlight = document.createElement("div");
-                    produceHighlighted(item.code, highlight);
+        let width = this.game.Info.Width;
+        let height = this.game.Info.Height;
 
-                    tab.appendChild(highlight);
-                }
-            });
+        for (let i = 0; i < width / 2; i++) {
+            for (let y = 0; y < height; y++) {
+                let a = i + y * width;
+                let b = (width - i - 1) + y * width;
 
-            leftTabs.script.tab.appendChild(node);
+                [ter.terrain[a], ter.terrain[b]] = [ter.terrain[b], ter.terrain[a]];
+                [ter.walls[a], ter.walls[b]] = [ter.walls[b], ter.walls[a]];
+            }
         }
 
-        this.start();
+        this.updateMesh();
+
+        for (const item of this.game.Units) {
+            item.cX = width * 8 - item.cX;
+        }
+
+        this.unitParent.children.length = 0;
+        this.createUnits();
+    }
+
+    flipHorizontal() {
+        let ter = this.game.Terrain;
+
+        let width = this.game.Info.Width;
+        let height = this.game.Info.Height;
+
+        for (let x = 0; x < width; x++) {
+            for (let i = 0; i < height / 2; i++) {
+                let a = x + i * width;
+                let b = x + (height - i - 1) * width;
+
+                [ter.terrain[a], ter.terrain[b]] = [ter.terrain[b], ter.terrain[a]];
+                [ter.walls[a], ter.walls[b]] = [ter.walls[b], ter.walls[a]];
+            }
+        }
+
+        this.updateMesh();
+
+        for (const item of this.game.Units) {
+            item.cY = width * 8 - item.cY;
+        }
+
+        this.unitParent.children.length = 0;
+        this.createUnits();
+    }
+
+    rotateR() {
+        let terrain = this.game.Terrain;
+
+        let ter = new Array(terrain.terrain.length);
+        let wal = new Array(terrain.walls.length);
+
+        let width = this.game.Info.Width;
+        let height = this.game.Info.Height;
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                ter[(width - y - 1) + x * height] = terrain.terrain[x + y * width];
+                wal[(width - y - 1) + x * height] = terrain.walls[x + y * width];
+            }
+        }
+
+        terrain.terrain = ter;
+        this.game.Info.Width = height;
+        this.game.Info.Height = width;
+
+        this.updateMesh();
+
+        for (const item of this.game.Units) {
+            [item.cX, item.cY] = [item.cY, width * 8 - item.cX];
+        }
+
+        this.unitParent.children.length = 0;
+        this.createUnits();
+    }
+
+    rotateL() {
+        let terrain = this.game.Terrain;
+
+        let rotated = new Array(terrain.terrain.length);
+        let wal = new Array(terrain.walls.length);
+
+        let width = this.game.Info.Width;
+        let height = this.game.Info.Height;
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                rotated[y + (height - x - 1) * height] = terrain.terrain[x + y * width];
+                wal[y + (height - x - 1) * height] = terrain.walls[x + y * width];
+            }
+        }
+
+        terrain.terrain = rotated;
+        this.game.Info.Width = height;
+        this.game.Info.Height = width;
+
+        this.updateMesh();
+
+        for (const item of this.game.Units) {
+            [item.cX, item.cY] = [width * 8 - item.cY, item.cX];
+        }
+
+        this.unitParent.children.length = 0;
+        this.createUnits();
+    }
+
+    invTer() {
+        let terrain = this.game.Terrain;
+        let width = this.game.Info.Width;
+        let height = this.game.Info.Height;
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                let val = terrain.terrain[x + y * width];
+
+                if (val != 500) {
+                    terrain.terrain[x + y * width] = 9 - val;
+                }
+            }
+        }
+
+        this.updateMesh();
+    }
+
+    invTex() {
+        this.game.Terrain.terrainTextures.reverse();
+        this.game.Terrain.terrainBrightness.reverse();
+
+        this.updateMesh();
+    }
+
+    _resize() {
+        const game = this.game;
+        const terrain = game.Terrain;
+
+        let w1 = this.game.Info.Width;
+        let h1 = this.game.Info.Height;
+
+        let w2 = parseInt(this.elements[7].children[1].value);
+        let h2 = parseInt(this.elements[7].children[4].value);
+
+        let w3 = Math.min(w1, w2);
+        let h3 = Math.min(h1, h2);
+
+        let ter = new Array(w2 * h2).fill(500);
+        let wal = new Array(w2 * h2).fill(0);
+
+        for (let y = 0; y < w3; y++) {
+            for (let x = 0; x < h3; x++) {
+                ter[x + y * w2] = terrain.terrain[x + y * w1];
+                wal[x + y * w2] = terrain.walls[x + y * w1];
+            }
+        }
+
+        this.game.Info.Width = w2;
+        this.game.Info.Height = h2;
+
+        terrain.terrain = ter;
+        terrain.walls = wal;
+        terrain.terraformLevels = new Array(w2 * h2).fill(0);
+        terrain.partialTerraform = new Array(w2 * h2).fill(0);
+
+        this.updateMesh();
+    }
+
+    scale() {
+        const game = this.game;
+        const terrain = game.Terrain;
+
+        let w1 = this.game.Info.Width;
+        let h1 = this.game.Info.Height;
+
+        let w2 = parseInt(this.elements[7].children[1].value);
+        let h2 = parseInt(this.elements[7].children[4].value);
+
+        let ter = new Array(w2 * h2).fill(0);
+        let wal = new Array(w2 * h2).fill(0);
+
+        /*function px(arr: number[], x: number, y: number) {
+            x = Math.min(Math.max(x, 0), w1 - 1);
+            y = Math.min(Math.max(y, 0), h1 - 1);
+
+            let v = arr[x + y * w1];
+            if(v == 500) {
+                v = -1;
+            }
+            return v;
+        }
+
+        function cubic_hermite(A: number, B: number, C: number, D: number, t: number) {
+            let a = (D - A + 3 * (B - C)) / 2;
+            // let b = A + 2 * C - (5 * B + D) / 2;
+            let b = (A + C) / 2 - B - a;
+            let c = (C - A) / 2;
+
+            return B + t * (c + t * (b + t * a));
+        }
+
+        function bicubic(arr: number[], x: number, y: number) {
+            let asd = [];
+
+            let xint = Math.floor(x);
+            let yint = Math.floor(y);
+
+            let xFrac = x % 1;
+            let yFrac = y % 1;
+
+            for (let i = -1; i < 3; i++) {
+                let a = px(arr, xint - 1, yint + i);
+                let b = px(arr, xint + 0, yint + i);
+                let c = px(arr, xint + 1, yint + i);
+                let d = px(arr, xint + 2, yint + i);
+                asd.push(cubic_hermite(a, b, c, d, xFrac));
+            }
+
+            return cubic_hermite(asd[0], asd[1], asd[2], asd[3], yFrac);
+        }*/
+
+        function bilinear(arr: number[], x: number, y: number) {
+            let tl = arr[Math.floor(x) + Math.floor(y) * w1];
+            let tr = arr[Math.ceil(x) + Math.floor(y) * w1];
+            let bl = arr[Math.floor(x) + Math.ceil(y) * w1];
+            let br = arr[Math.ceil(x) + Math.ceil(y) * w1];
+
+            let xFrac = x % 1;
+            let yFrac = y % 1;
+
+            return (tl * (1 - xFrac) + tr * xFrac) * (1 - yFrac) + (bl * (1 - xFrac) + br * xFrac) * yFrac;
+        }
+
+        for (let y = 0; y < w2; y++) {
+            for (let x = 0; x < h2; x++) {
+                let x1 = (x / (w2 - 1)) * (w1 - 1);
+                let y1 = (y / (h2 - 1)) * (h1 - 1);
+
+                let h = Math.round(bilinear(terrain.terrain, x1, y1));
+                if (h > 9) {
+                    h = 500;
+                }
+                if(h < 0) {
+                    h = 0;
+                }
+                ter[x + y * w2] = Math.round(h);
+                wal[x + y * w2] = Math.round(bilinear(terrain.walls, x1, y1));
+            }
+        }
+
+        this.game.Info.Width = w2;
+        this.game.Info.Height = h2;
+
+        terrain.terrain = ter;
+        terrain.walls = wal;
+        terrain.terraformLevels = new Array(w2 * h2).fill(0);
+        terrain.partialTerraform = new Array(w2 * h2).fill(0);
+
+        this.updateMesh();
+
+        const sw = w2 / w1;
+        const sh = h2 / h1;
+
+        for (const item of this.game.Units) {
+            item.cX *= sw;
+            item.cY *= sh;
+        }
+
+        this.unitParent.children.length = 0;
+        this.createUnits();
     }
 };

@@ -530,8 +530,6 @@ class ColonialSpace {
 
         this.Topic = parseInt(data.querySelector("p").textContent);
         // this.ThumbSize = parseInt(data.querySelector("u").textContent); // why?
-
-        debugger;
     }
 
     get imageUrl() {
@@ -540,25 +538,28 @@ class ColonialSpace {
 
     async download() {
         let buffer = await (await fetch(`https://knucklecracker.com/creeperworld4/queryMaps.php?query=map&guid=${this.Md5}`)).arrayBuffer();
-
-        let compressed = Array.from(new Uint8Array(buffer));
-
-        // int32 uncompressed size
-        compressed = compressed.slice(4);
-
-        let data = new Zlib.Gunzip(
-            new Uint8Array(compressed)
-        ).decompress() as Uint8Array;
-
-        let reader = new Reader(data.buffer);
-
-        // skip root tag id
-        let key = reader.readUint8();
-        // skip root tag
-        let val = reader.readString();
-
-        return new TagCompound(reader);
+        return loadMap(new Uint8Array(buffer));
     }
+}
+
+export async function loadMap(data: Uint8Array) {
+    let compressed = Array.from(data);
+
+    // int32 uncompressed size
+    compressed = compressed.slice(4);
+
+    let uncompressed = new Zlib.Gunzip(
+        new Uint8Array(compressed)
+    ).decompress() as Uint8Array;
+
+    let reader = new Reader(uncompressed.buffer);
+
+    // skip root tag id
+    let key = reader.readUint8();
+    // skip root tag
+    let val = reader.readString();
+
+    return new TagCompound(reader);
 }
 
 async function fetchMapList() {

@@ -6,8 +6,17 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Document</title>
 
-        <script src="./lib/gunzip.min.js"></script>
-        <script src="./lib/lzma_worker.js"></script>
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://cdn.jsdelivr.net/npm/three@0.156.1/src/Three.js",
+                    "three/": "https://cdn.jsdelivr.net/npm/three@0.156.1/"
+                }
+            }
+        </script>
+
+        <script src="https://cdn.jsdelivr.net/npm/zlibjs@0.3.1/bin/gunzip.min.js" integrity="sha256-SX6+J75+oYM1UXReEFZhRwyL8aRRJJNeMs21kBvIFAM=" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/lzma@2.3.2/src/lzma_worker-min.js" integrity="sha256-4hictAFB9ZgpiggQ4Z5BM6peirYqChKVpZRM5dMGRSM=" crossorigin="anonymous"></script>
 
         <script src="./js/hyperscript.js"></script>
 
@@ -18,7 +27,7 @@
         <link rel="stylesheet" href="./style/style.css">
     </head>
 
-    <body>
+    <body class="dark">
         <div id="mainMenu">
             <div class="center">
                 <button id="csb">Colonial Space</button>
@@ -44,7 +53,7 @@
                         <option>Size</option>
                         <option>Random</option>
                     </select>
-                    Rev<input id="reverse" type="checkbox">
+                    Reverse<input id="reverse" type="checkbox">
                 </div>
             </div>
             <div id="pageSelection"></div>

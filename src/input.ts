@@ -8,16 +8,20 @@ const enum KeyCode {
     Space = "Space"
 }
 
-let keys = new Set<KeyCode>();
+let keys = new Set<string>();
+let keyDown = new Set<string>();
+let keyUp = new Set<string>();
 
 let leftDown = false;
 let rightDown = false;
 let middleDown = false;
 
 document.body.addEventListener("keydown", (e) => {
+    keyDown.add(e.code);
     keys.add(e.code);
 });
 document.body.addEventListener("keyup", (e) => {
+    keyUp.add(e.code);
     keys.delete(e.code);
 });
 document.addEventListener("mousedown", (e) => {
@@ -40,11 +44,16 @@ function GetKey(code: KeyCode) {
 }
 
 function GetKeyDown(code: KeyCode) {
-    throw "Not implemented";
+    return keyDown.has(code);
 }
 
 function GetKeyUp(code: KeyCode) {
-    throw "Not implemented";
+    return keyUp.has(code);
+}
+
+export function UpdateKeys() {
+    keyDown.clear();
+    keyUp.clear();
 }
 
 

@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@types/three": "0.155.1",
+    "typescript": "^5.2.2"
+  }
+}

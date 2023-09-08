@@ -1,0 +1,47 @@
+.cpack_main {
+    color: white;
+
+    width: 100%;
+    margin: 10px;
+
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
+    gap: 10px 10px;
+}
+
+.cpack_topbar {
+    grid-column-start: 1;
+    grid-column-end: 3;
+}
+
+.listThing {
+    display: flex;
+    flex-direction: column;
+
+    border: white 1px solid;
+    min-height: 100px;
+
+    >:first-child {
+        /* display: flex; */
+        border-bottom: white 1px solid;
+        color: white;
+        padding: 5px;
+
+        * {
+            background-color: #AAA;
+            margin: 1px;
+            padding: 4px;
+        }
+    }
+
+    >:nth-child(2) {
+        padding: 5px;
+        overflow-y: auto;
+    }
+}
+
+.cpack_sub {
+    grid-column-start: 1;
+    grid-column-end: 3;
+}

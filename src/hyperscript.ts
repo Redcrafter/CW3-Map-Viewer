@@ -19,7 +19,7 @@ interface El {
 }
 
 function hyperscript(tag: string, props: Object, ...children: any[]): El {
-    if(!props) props = {};
+    if (!props) props = {};
     return { tag, props, children: flatten(children) }
 }
 
@@ -27,9 +27,9 @@ function addProps(el: HTMLElement, props: Object) {
     for (const key in props) {
         let item = props[key];
 
-        if(key == "oninput") {
+        if (key == "oninput") {
             el.oninput = item;
-        } else if(key == "onclick") {
+        } else if (key == "onclick") {
             el.onclick = item;
         } else /*if(key.startsWith("on")) {
             el.addEventListener(key.substr(2), item);
@@ -47,9 +47,9 @@ function addProps(el: HTMLElement, props: Object) {
  */
 function domDiff(element: El | string, container: HTMLElement, childIndex: number) {
     // element to replace
-    let el = container.childNodes[childIndex];
+    let el = container.childNodes[childIndex] as HTMLElement;
 
-    if(!element) {
+    if (!element) {
         return;
     }
 
@@ -67,7 +67,7 @@ function domDiff(element: El | string, container: HTMLElement, childIndex: numbe
             }
             el = document.createElement(element.tag);
             container.insertBefore(el, container.childNodes[childIndex]);
-            addProps(el, element.props);            
+            addProps(el, element.props);
         } else {
             for (const item of el.attributes) {
                 if (!element.props.hasOwnProperty(item.nodeName)) {
@@ -80,7 +80,7 @@ function domDiff(element: El | string, container: HTMLElement, childIndex: numbe
 
         let pos = 0;
         for (const item of element.children) {
-            if(item) {
+            if (item) {
                 domDiff(item, el, pos);
                 pos++;
             }
@@ -106,9 +106,11 @@ function render(element: El | El[] | string, container: HTMLElement) {
     }
 }
 
+function createElements(element: El): HTMLElement;
+function createElements(element: El[]): HTMLElement[];
 function createElements(element: El | El[] | string) {
     function create(element: El | string) {
-        if(typeof element === "string") {
+        if (typeof element === "string") {
             return document.createTextNode(element);
         } else {
             let el = document.createElement(element.tag);
@@ -122,8 +124,8 @@ function createElements(element: El | El[] | string) {
         }
     }
 
-    if(element instanceof Array) {
-        let ret = [];
+    if (element instanceof Array) {
+        let ret: Node[] = [];
 
         for (const item of element) {
             ret.push(create(item));

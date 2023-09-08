@@ -1,11 +1,13 @@
 import { colonialSpace } from "./colonialSpace.js";
-import * as cw3 from "./cw3.js";
-import * as cw4 from "./cw4.js";
+import * as cw3 from "./cw3/cw3.js";
+import * as cw4 from "./cw4/cw4.js";
 import { mapEditor } from "./mapEditor.js";
 
+/*
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
     document.body.classList.add("dark");
 }
+*/
 
 let mainMenu = {
     display(display: boolean) {
@@ -35,11 +37,9 @@ loadButton.addEventListener("click", () => {
 
         reader.onload = () => {
             if (file.name.endsWith(".cw3")) {
-                cw3.decompress(reader.result as ArrayBuffer, mapEditor.loadMap);
+                cw3.decompress(reader.result as ArrayBuffer).then(x => mapEditor.loadMap(x));
             } else {
-                cw4.loadMap(new Uint8Array(reader.result as ArrayBuffer)).then(x => {
-                    mapEditor.loadMap(x);
-                });
+                mapEditor.loadMap(cw4.loadMap(new Uint8Array(reader.result as ArrayBuffer)));
             }
 
             mapEditor.display(true);

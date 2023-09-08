@@ -1,5 +1,5 @@
-import * as cw3 from "./cw3.js";
-import * as cw4 from "./cw4.js";
+import * as cw3 from "./cw3/cw3.js";
+import * as cw4 from "./cw4/cw4.js";
 import { mapEditor } from "./mapEditor.js";
 let currentPage = 0;
 let pageSize = 20;

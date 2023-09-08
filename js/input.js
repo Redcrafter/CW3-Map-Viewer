@@ -1,11 +1,15 @@
 let keys = new Set();
+let keyDown = new Set();
+let keyUp = new Set();
 let leftDown = false;
 let rightDown = false;
 let middleDown = false;
 document.body.addEventListener("keydown", (e) => {
+    keyDown.add(e.code);
     keys.add(e.code);
 });
 document.body.addEventListener("keyup", (e) => {
+    keyUp.add(e.code);
     keys.delete(e.code);
 });
 document.addEventListener("mousedown", (e) => {
@@ -38,10 +42,14 @@ function GetKey(code) {
     return keys.has(code);
 }
 function GetKeyDown(code) {
-    throw "Not implemented";
+    return keyDown.has(code);
 }
 function GetKeyUp(code) {
-    throw "Not implemented";
+    return keyUp.has(code);
+}
+export function UpdateKeys() {
+    keyDown.clear();
+    keyUp.clear();
 }
 function GetMouseButton(button) {
     switch (button) {

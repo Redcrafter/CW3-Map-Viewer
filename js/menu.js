@@ -1,9 +1,7 @@
 import { colonialSpace } from "./colonialSpace.js";
-import * as cw3 from "./cw3.js";
+import * as cw3 from "./cw3/cw3.js";
+import * as cw4 from "./cw4/cw4.js";
 import { mapEditor } from "./mapEditor.js";
-if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    document.body.classList.add("dark");
-}
 let mainMenu = {
     display(display) {
         document.getElementById("mainMenu").style.display = display ? "" : "none";
@@ -18,14 +16,19 @@ colonialSpaceButton.addEventListener("click", () => {
 loadButton.addEventListener("click", () => {
     let fileInput = document.createElement("input");
     fileInput.setAttribute("type", "file");
-    fileInput.setAttribute("accept", ".cw3");
+    fileInput.setAttribute("accept", ".cw3,.cw4");
     fileInput.click();
     fileInput.addEventListener("change", () => {
         let file = fileInput.files[0];
         let reader = new FileReader();
         reader.readAsArrayBuffer(file);
         reader.onload = () => {
-            cw3.decompress(reader.result, mapEditor.loadMap);
+            if (file.name.endsWith(".cw3")) {
+                cw3.decompress(reader.result).then(x => mapEditor.loadMap(x));
+            }
+            else {
+                mapEditor.loadMap(cw4.loadMap(new Uint8Array(reader.result)));
+            }
             mapEditor.display(true);
             mainMenu.display(false);
             mapEditor.onClose = () => {

@@ -1,6 +1,6 @@
-import { Game } from "./cw3.js";
-import { cw3MapViewer } from "./cw3display.js";
-import { cw4MapViewer } from "./cw4Display.js";
+import { Game } from "./cw3/cw3.js";
+import { cw3MapViewer } from "./cw3/cw3display.js";
+import { cw4MapViewer } from "./cw4/cw4Display.js";
 const mapEditor = {
     display(display) {
         document.getElementById("mapEditor").style.display = display ? "" : "none";
@@ -17,6 +17,7 @@ const mapEditor = {
 };
 const mainTabWindow = document.getElementById("mainTabWindow");
 const topTabBar = document.getElementById("topTabBar");
+const topTabs = [];
 const container = document.getElementById("canvasContainer");
 const canvas = document.getElementById("mainCanvas");
 const leftTabs = {
@@ -50,34 +51,18 @@ leftTabs.image.button.addEventListener("click", () => {
     leftTabs.script.tab.style.display = "none";
     leftTabs.image.tab.style.display = "";
 });
-let renderer;
 async function openCW3(game) {
-    if (renderer instanceof cw3MapViewer) {
-        renderer.loadMap(game);
-    }
-    else {
-        if (renderer) {
-            renderer.delete();
-        }
-        renderer = new cw3MapViewer(canvas, container);
-        await renderer.init();
-        renderer.loadMap(game);
-    }
+    let renderer = new cw3MapViewer(canvas, container);
+    await renderer.loadMap(game);
 }
 async function openCW4(game) {
-    if (renderer instanceof cw4MapViewer) {
-        renderer.loadMap(game);
-    }
-    else {
-        if (renderer) {
-            renderer.delete();
-        }
-        renderer = new cw4MapViewer(canvas, container);
-        await renderer.init();
-        renderer.loadMap(game);
-    }
+    document.getElementById("leftTabBar").style.display = "none";
+    document.getElementById("leftNav").style.display = "none";
+    let renderer = new cw4MapViewer(canvas, container);
+    renderer.loadMap(game);
 }
-function selectTopTab(el) {
+function selectTopTab(i) {
+    let el = topTabs[i];
     if (currentTopTab) {
         currentTopTab.topEl.removeAttribute("active");
         currentTopTab.main.removeAttribute("active");
@@ -137,10 +122,11 @@ function addTab(options) {
         topEl,
         main
     };
+    topTabs.push(el);
     topEl.addEventListener("click", () => {
-        selectTopTab(el);
+        selectTopTab(topTabs.indexOf(el));
     });
-    selectTopTab(el);
+    selectTopTab(topTabs.length - 1);
     return main;
 }
-export { mapEditor, addTab, leftTabs };
+export { mapEditor, addTab, selectTopTab, leftTabs };
